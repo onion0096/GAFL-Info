@@ -1,19 +1,15 @@
 from flask import Flask, request, jsonify
-import requests
-from datetime import date, datetime
-import os
+from datetime import date, datetime, timedelta
 
 app = Flask(__name__)
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-
 # =============================================
-# 2026 GAFL 학사일정 (구글 캘린더 기준)
+# 2026 GAFL 학사일정
 # =============================================
 SCHEDULE = [
     {"date": "2026-03-03", "event": "개학식 / 환영식"},
     {"date": "2026-03-11", "event": "IB 고급 영어 어휘 대회"},
-    {"date": "2026-03-17", "end": "2026-03-17", "event": "ASG Spring SA 시작"},
+    {"date": "2026-03-17", "event": "ASG Spring SA 시작"},
     {"date": "2026-03-18", "end": "2026-03-19", "event": "학교교육설명회"},
     {"date": "2026-03-24", "event": "전국연합학력평가 (서울)"},
     {"date": "2026-04-03", "event": "DP1 학부모 Subject Conference"},
@@ -21,7 +17,7 @@ SCHEDULE = [
     {"date": "2026-04-15", "event": "IB 영어 에세이 쓰기 대회"},
     {"date": "2026-04-22", "end": "2026-04-24", "event": "국내반 1차 정기시험"},
     {"date": "2026-04-27", "end": "2026-05-01", "event": "DP1 GVT / IB Retake 시험"},
-    {"date": "2026-05-04", "end": "2026-05-15", "event": "학교 휴일 / AP 시험 시작"},
+    {"date": "2026-05-04", "end": "2026-05-15", "event": "학교 휴일 / AP 시험"},
     {"date": "2026-05-08", "event": "PreDP & DP1 체육대회"},
     {"date": "2026-05-13", "end": "2026-05-15", "event": "학부모 공개수업"},
     {"date": "2026-05-20", "event": "IB 역사 대회"},
@@ -55,54 +51,44 @@ SCHEDULE = [
     {"date": "2027-01-18", "end": "2027-01-27", "event": "GAFL IB English Winter Camp"},
     {"date": "2027-02-03", "end": "2027-02-04", "event": "교사 출근 / 졸업식"},
     {"date": "2027-02-06", "end": "2027-02-09", "event": "설날 연휴"},
-    {"date": "2027-02-22", "end": "2027-02-26", "event": "교사 신학기 준비 / DP1 학부모 해외대학 상담 (2/23~25)"},
+    {"date": "2027-02-22", "end": "2027-02-26", "event": "교사 신학기 준비 / DP1 학부모 해외대학 상담"},
 ]
 
-
-def get_schedule_text():
-    lines = []
-    for s in SCHEDULE:
-        end_part = f" ~ {s['end']}" if s.get("end") else ""
-        lines.append(f"{s['date']}{end_part}: {s['event']}")
-    return "\n".join(lines)
+DAYS_KR = ["월", "화", "수", "목", "금", "토", "일"]
 
 
-def ask_claude(user_message):
-    today = date.today().isoformat()
-    schedule_text = get_schedule_text()
+def parse_date(s):
+    return datetime.strptime(s, "%Y-%m-%d").date()
 
-    system_prompt = f"""당신은 GAFL(경기외국어고등학교 국제반) 학사일정 안내 챗봇입니다.
-오늘 날짜: {today}
 
-아래는 2026 GAFL 학사일정입니다:
-{schedule_text}
+def fmt_date(d):
+    return f"{d.month}월 {d.day}일({DAYS_KR[d.weekday()]})"
 
-답변 규칙:
-- 친근하고 간결하게 답변 (3~4줄 이내)
-- 날짜 형식: "○월 ○일(요일)" 형식 사용
-- 기간이 있는 일정은 시작~종료 날짜 모두 안내
-- 오늘로부터 며칠 남았는지 D-day도 함께 알려주기
-- 일일/주간/월간 조회 시 해당 기간의 모든 일정 나열
-- 해당 일정 없으면 "해당 기간에 일정이 없어요"라고 답변
-- 이모지 적절히 사용"""
 
-    response = requests.post(
-        "https://api.anthropic.com/v1/messages",
-        headers={
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-        json={
-            "model": "claude-sonnet-4-6",
-            "max_tokens": 500,
-            "system": system_prompt,
-            "messages": [{"role": "user", "content": user_message}],
-        },
-        timeout=10,
-    )
-    data = response.json()
-    return data["content"][0]["text"]
+def dday(d):
+    diff = (d - date.today()).days
+    if diff == 0:
+        return "오늘"
+    elif diff > 0:
+        return f"D-{diff}"
+    else:
+        return f"D+{abs(diff)}"
+
+
+def is_in_range(s, start, end):
+    """일정이 주어진 날짜 범위와 겹치는지 확인"""
+    s_start = parse_date(s["date"])
+    s_end = parse_date(s.get("end", s["date"]))
+    return s_start <= end and s_end >= start
+
+
+def format_event(s):
+    s_start = parse_date(s["date"])
+    if s.get("end"):
+        s_end = parse_date(s["end"])
+        return f"📌 {fmt_date(s_start)} ~ {fmt_date(s_end)}\n   {s['event']} ({dday(s_start)})"
+    else:
+        return f"📌 {fmt_date(s_start)} {s['event']} ({dday(s_start)})"
 
 
 def kakao_response(text, buttons=None):
@@ -115,6 +101,9 @@ def kakao_response(text, buttons=None):
     return jsonify(result)
 
 
+MAIN_BUTTONS = ["오늘 일정", "이번 주 일정", "이번 달 일정", "방학 일정", "다음 시험"]
+
+
 # =============================================
 # 엔드포인트
 # =============================================
@@ -124,69 +113,96 @@ def health():
     return "GAFL 알리미 서버 정상 작동 중 🏫"
 
 
-@app.route("/chat", methods=["POST"])
-def chat():
-    """자유 대화 - Claude AI가 답변"""
-    try:
-        body = request.json
-        user_msg = body.get("userRequest", {}).get("utterance", "")
-        if not user_msg:
-            return kakao_response("메시지를 입력해주세요.")
-
-        reply = ask_claude(user_msg)
-        return kakao_response(reply, buttons=["오늘 일정", "이번 주 일정", "이번 달 일정", "방학 일정", "다음 시험"])
-    except Exception as e:
-        return kakao_response(f"오류가 발생했어요. 잠시 후 다시 시도해주세요.\n({str(e)})")
-
-
 @app.route("/today", methods=["POST"])
 def today_schedule():
-    """오늘 일정"""
-    try:
-        reply = ask_claude("오늘 학교 일정이 있어?")
-        return kakao_response(reply, buttons=["이번 주 일정", "이번 달 일정", "다음 시험", "방학 일정"])
-    except Exception as e:
-        return kakao_response("오류가 발생했어요. 잠시 후 다시 시도해주세요.")
+    today = date.today()
+    events = [s for s in SCHEDULE if is_in_range(s, today, today)]
+    if events:
+        lines = [f"📅 오늘({fmt_date(today)}) 일정\n"]
+        lines += [format_event(s) for s in events]
+        text = "\n".join(lines)
+    else:
+        text = f"📅 오늘({fmt_date(today)})은 일정이 없어요 😊"
+    return kakao_response(text, MAIN_BUTTONS)
 
 
 @app.route("/weekly", methods=["POST"])
 def weekly_schedule():
-    """이번 주 일정"""
-    try:
-        reply = ask_claude("이번 주 학교 일정을 모두 알려줘")
-        return kakao_response(reply, buttons=["오늘 일정", "이번 달 일정", "다음 시험", "방학 일정"])
-    except Exception as e:
-        return kakao_response("오류가 발생했어요. 잠시 후 다시 시도해주세요.")
+    today = date.today()
+    # 이번 주 월요일~일요일
+    start = today - timedelta(days=today.weekday())
+    end = start + timedelta(days=6)
+    events = [s for s in SCHEDULE if is_in_range(s, start, end)]
+    if events:
+        lines = [f"📅 이번 주 일정 ({fmt_date(start)} ~ {fmt_date(end)})\n"]
+        lines += [format_event(s) for s in events]
+        text = "\n".join(lines)
+    else:
+        text = f"📅 이번 주({fmt_date(start)} ~ {fmt_date(end)})는 일정이 없어요 😊"
+    return kakao_response(text, MAIN_BUTTONS)
 
 
 @app.route("/monthly", methods=["POST"])
 def monthly_schedule():
-    """이번 달 일정"""
-    try:
-        reply = ask_claude("이번 달 학교 일정을 모두 알려줘")
-        return kakao_response(reply, buttons=["오늘 일정", "이번 주 일정", "다음 시험", "방학 일정"])
-    except Exception as e:
-        return kakao_response("오류가 발생했어요. 잠시 후 다시 시도해주세요.")
+    today = date.today()
+    start = today.replace(day=1)
+    # 이번 달 말일
+    if today.month == 12:
+        end = today.replace(year=today.year+1, month=1, day=1) - timedelta(days=1)
+    else:
+        end = today.replace(month=today.month+1, day=1) - timedelta(days=1)
+    events = [s for s in SCHEDULE if is_in_range(s, start, end)]
+    if events:
+        lines = [f"📅 {today.month}월 일정\n"]
+        lines += [format_event(s) for s in events]
+        text = "\n".join(lines)
+    else:
+        text = f"📅 {today.month}월은 일정이 없어요 😊"
+    return kakao_response(text, MAIN_BUTTONS)
 
 
 @app.route("/vacation", methods=["POST"])
 def vacation():
-    """방학 일정"""
-    try:
-        reply = ask_claude("여름방학과 겨울방학이 언제야? D-day도 알려줘")
-        return kakao_response(reply, buttons=["오늘 일정", "이번 달 일정", "다음 시험"])
-    except Exception as e:
-        return kakao_response("오류가 발생했어요. 잠시 후 다시 시도해주세요.")
+    keywords = ["방학", "Summer Camp", "Winter Camp", "PreGAFL"]
+    today = date.today()
+    events = [
+        s for s in SCHEDULE
+        if any(k in s["event"] for k in keywords) and parse_date(s["date"]) >= today
+    ]
+    if events:
+        lines = ["🏖️ 방학 관련 일정\n"]
+        lines += [format_event(s) for s in events[:5]]
+        text = "\n".join(lines)
+    else:
+        text = "🏖️ 남은 방학 일정이 없어요."
+    return kakao_response(text, MAIN_BUTTONS)
 
 
 @app.route("/exam", methods=["POST"])
 def next_exam():
-    """다음 시험 일정"""
-    try:
-        reply = ask_claude("다음 시험 일정이 언제야? D-day도 알려줘")
-        return kakao_response(reply, buttons=["오늘 일정", "이번 달 일정", "방학 일정"])
-    except Exception as e:
-        return kakao_response("오류가 발생했어요. 잠시 후 다시 시도해주세요.")
+    keywords = ["시험", "정기시험", "Retake", "Sem.", "수능"]
+    today = date.today()
+    events = [
+        s for s in SCHEDULE
+        if any(k in s["event"] for k in keywords) and parse_date(s["date"]) >= today
+    ]
+    if events:
+        next_e = events[0]
+        lines = ["📝 다음 시험 일정\n", format_event(next_e)]
+        if len(events) > 1:
+            lines.append("\n그 다음 시험:")
+            lines += [format_event(s) for s in events[1:3]]
+        text = "\n".join(lines)
+    else:
+        text = "📝 남은 시험 일정이 없어요."
+    return kakao_response(text, MAIN_BUTTONS)
+
+
+@app.route("/chat", methods=["POST"])
+def chat():
+    """자유 대화 - 버튼 안내로 대체"""
+    text = "아래 버튼으로 원하는 일정을 조회해보세요! 😊\n\n원하시는 항목을 선택해주세요."
+    return kakao_response(text, MAIN_BUTTONS)
 
 
 if __name__ == "__main__":
