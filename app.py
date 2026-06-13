@@ -121,7 +121,7 @@ def today_schedule():
     if events:
         lines = [f"📅 오늘({fmt_date(today)}) 일정\n"]
         lines += [format_event(s) for s in events]
-        text = "\n".join(lines)
+        text = "\n\n".join(lines)
     else:
         text = f"📅 오늘({fmt_date(today)})은 일정이 없어요 😊"
     return kakao_response(text, MAIN_BUTTONS)
@@ -137,7 +137,7 @@ def weekly_schedule():
     if events:
         lines = [f"📅 이번 주 일정 ({fmt_date(start)} ~ {fmt_date(end)})\n"]
         lines += [format_event(s) for s in events]
-        text = "\n".join(lines)
+        text = "\n\n".join(lines)
     else:
         text = f"📅 이번 주({fmt_date(start)} ~ {fmt_date(end)})는 일정이 없어요 😊"
     return kakao_response(text, MAIN_BUTTONS)
@@ -156,7 +156,7 @@ def monthly_schedule():
     if events:
         lines = [f"📅 {today.month}월 일정\n"]
         lines += [format_event(s) for s in events]
-        text = "\n".join(lines)
+        text = "\n\n".join(lines)
     else:
         text = f"📅 {today.month}월은 일정이 없어요 😊"
     return kakao_response(text, MAIN_BUTTONS)
@@ -173,7 +173,7 @@ def vacation():
     if events:
         lines = ["🏖️ 방학 관련 일정\n"]
         lines += [format_event(s) for s in events[:5]]
-        text = "\n".join(lines)
+        text = "\n\n".join(lines)
     else:
         text = "🏖️ 남은 방학 일정이 없어요."
     return kakao_response(text, MAIN_BUTTONS)
@@ -193,7 +193,7 @@ def next_exam():
         if len(events) > 1:
             lines.append("\n그 다음 시험:")
             lines += [format_event(s) for s in events[1:3]]
-        text = "\n".join(lines)
+        text = "\n\n".join(lines)
     else:
         text = "📝 남은 시험 일정이 없어요."
     return kakao_response(text, MAIN_BUTTONS)
