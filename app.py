@@ -62,7 +62,7 @@ def parse_date(s):
 
 
 def fmt_date(d):
-    return f"{d.month}월 {d.day}일({DAYS_KR[d.weekday()]})"
+    return f"{d.month}/{d.day}({DAYS_KR[d.weekday()]})"
 
 
 def dday(d):
@@ -86,9 +86,10 @@ def format_event(s):
     s_start = parse_date(s["date"])
     if s.get("end"):
         s_end = parse_date(s["end"])
-        return f"📌 {fmt_date(s_start)} ~ {fmt_date(s_end)}\n   {s['event']} ({dday(s_start)})"
+        date_str = f"{fmt_date(s_start)}~{fmt_date(s_end)}"
     else:
-        return f"📌 {fmt_date(s_start)} {s['event']} ({dday(s_start)})"
+        date_str = fmt_date(s_start)
+    return f"📌 {s['event']}\n   {date_str} | {dday(s_start)}"
 
 
 def kakao_response(text, buttons=None):
