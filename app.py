@@ -89,7 +89,7 @@ def format_event(s):
         date_str = f"{fmt_date(s_start)}~{fmt_date(s_end)}"
     else:
         date_str = fmt_date(s_start)
-    return f"📌 {s['event']}\n   {date_str} | {dday(s_start)}"
+    return f"🔹 {s['event']}\n{date_str} | {dday(s_start)}"
 
 
 def kakao_response(text, buttons=None):
