@@ -81,7 +81,7 @@ def kakao_response(text, buttons=None):
     return jsonify(result)
 
 
-MAIN_BUTTONS = ["오늘 일정", "이번 주 일정", "이번 달 일정", "방학 일정", "다음 시험"]
+MAIN_BUTTONS = ["오늘 일정", "이번 주 일정", "다음 주 일정", "이번 달 일정", "방학 일정", "다음 시험"]
 
 
 # =============================================
@@ -120,6 +120,22 @@ def weekly_schedule():
         text = "\n\n".join(lines)
     else:
         text = f"📅 이번 주({fmt_date(start)} ~ {fmt_date(end)})는 일정이 없어요 😊"
+    return kakao_response(text, MAIN_BUTTONS)
+
+
+@app.route("/next_week", methods=["POST"])
+def next_week_schedule():
+    today = date.today()
+    start = today - timedelta(days=today.weekday()) + timedelta(weeks=1)
+    end = start + timedelta(days=6)
+    schedule = load_schedule()
+    events = [s for s in schedule if is_in_range(s, start, end)]
+    if events:
+        lines = [f"📅 다음 주 일정\n({fmt_date(start)} ~ {fmt_date(end)})\n"]
+        lines += [format_event(s) for s in events]
+        text = "\n\n".join(lines)
+    else:
+        text = f"📅 다음 주({fmt_date(start)} ~ {fmt_date(end)})는 일정이 없어요 😊"
     return kakao_response(text, MAIN_BUTTONS)
 
 
