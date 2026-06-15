@@ -197,6 +197,113 @@ def next_exam():
     return kakao_response(text, MAIN_BUTTONS)
 
 
+
+@app.route("/next_month", methods=["POST"])
+def next_month_schedule():
+    today = date.today()
+    if today.month == 12:
+        first = today.replace(year=today.year + 1, month=1, day=1)
+    else:
+        first = today.replace(month=today.month + 1, day=1)
+    if first.month == 12:
+        last = first.replace(year=first.year + 1, month=1, day=1) - timedelta(days=1)
+    else:
+        last = first.replace(month=first.month + 1, day=1) - timedelta(days=1)
+    schedule = load_schedule()
+    events = [s for s in schedule if is_in_range(s, first, last)]
+    if events:
+        lines = [f"📅 {first.month}월 일정\n"]
+        lines += [format_event(s) for s in events]
+        text = "\n\n".join(lines)
+    else:
+        text = f"📅 {first.month}월은 일정이 없어요 😊"
+    return kakao_response(text, MAIN_BUTTONS)
+
+
+@app.route("/month", methods=["POST"])
+def month_schedule():
+    """N월 일정 - 사용자 발화에서 월 추출"""
+    import re
+    body = request.json
+    utterance = body.get("userRequest", {}).get("utterance", "")
+    match = re.search(r"(\d{1,2})월", utterance)
+    if not match:
+        return kakao_response("몇 월 일정을 알고 싶으신가요?\n예) '7월' 또는 '7월 일정'", MAIN_BUTTONS)
+    m = int(match.group(1))
+    if m < 1 or m > 12:
+        return kakao_response("1월~12월 사이로 입력해주세요.", MAIN_BUTTONS)
+    today = date.today()
+    year = today.year
+    # 1~2월은 다음 해로 처리 (학사일정 기준)
+    if m <= 2:
+        year = today.year + 1 if today.month >= 3 else today.year
+    first = date(year, m, 1)
+    if m == 12:
+        last = date(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        last = date(year, m + 1, 1) - timedelta(days=1)
+    schedule = load_schedule()
+    events = [s for s in schedule if is_in_range(s, first, last)]
+    if events:
+        lines = [f"📅 {m}월 일정\n"]
+        lines += [format_event(s) for s in events]
+        text = "\n\n".join(lines)
+    else:
+        text = f"📅 {m}월은 일정이 없어요 😊"
+    return kakao_response(text, MAIN_BUTTONS)
+
+
+@app.route("/parents", methods=["POST"])
+def parents_schedule():
+    """학부모 일정"""
+    keywords = ["학부모", "공개수업", "설명회", "상담"]
+    today = date.today()
+    schedule = load_schedule()
+    events = [
+        s for s in schedule
+        if any(k in s["event"] for k in keywords) and parse_date(s["date"]) >= today
+    ]
+    if events:
+        lines = ["👨‍👩‍👧 학부모 일정\n"]
+        lines += [format_event(s) for s in events[:7]]
+        text = "\n\n".join(lines)
+    else:
+        text = "👨‍👩‍👧 남은 학부모 일정이 없어요."
+    return kakao_response(text, MAIN_BUTTONS)
+
+
+@app.route("/all", methods=["POST"])
+def all_schedule():
+    """전체 일정 - 오늘 이후 일정을 월별로 묶어서"""
+    today = date.today()
+    schedule = load_schedule()
+    events = [s for s in schedule if parse_date(s["date"]) >= today]
+    if not events:
+        return kakao_response("📋 남은 일정이 없어요.", MAIN_BUTTONS)
+    # 월별 그룹화
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    for s in events:
+        d = parse_date(s["date"])
+        grouped[f"{d.year}-{d.month:02d}"].append(s)
+    lines = ["📋 전체 일정\n"]
+    for ym, items in sorted(grouped.items()):
+        y, m = ym.split("-")
+        lines.append(f"── {int(m)}월 ──")
+        for s in items:
+            s_start = parse_date(s["date"])
+            if s.get("end"):
+                s_end = parse_date(s["end"])
+                date_str = f"{fmt_date(s_start)}~{fmt_date(s_end)}"
+            else:
+                date_str = fmt_date(s_start)
+            lines.append(f"• {s['event']}\n  {date_str}")
+    text = "\n".join(lines)
+    # 카카오 메시지 최대 1000자 제한
+    if len(text) > 950:
+        text = text[:950] + "\n\n(이후 일정은 월별로 조회해주세요)"
+    return kakao_response(text, MAIN_BUTTONS)
+
 @app.route("/chat", methods=["POST"])
 def chat():
     text = "아래 버튼으로 원하는 일정을 조회해보세요! 😊"
