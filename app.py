@@ -309,6 +309,77 @@ def chat():
     text = "아래 버튼으로 원하는 일정을 조회해보세요! 😊"
     return kakao_response(text, MAIN_BUTTONS)
 
+# =============================================
+# 내정초 알리미 엔드포인트
+# =============================================
+NEIS_KEY = "d9492c1dac924cea87798bb22de4a376"
+NAEJEONG_OFFICE = "J10"
+NAEJEONG_SCHOOL = "7551054"
+
+def get_kst_today():
+    import pytz
+    KST = pytz.timezone('Asia/Seoul')
+    return datetime.now(KST).strftime("%Y%m%d")
+
+def get_kst_month():
+    import pytz
+    KST = pytz.timezone('Asia/Seoul')
+    return datetime.now(KST).strftime("%Y%m")
+
+def clean_menu(text):
+    import re
+    return re.sub(r'\([^)]*\)', '', text).strip()
+
+@app.route("/naejeong/meal", methods=["POST"])
+def naejeong_meal():
+    today = get_kst_today()
+    url = "https://open.neis.go.kr/hub/mealServiceDietInfo"
+    params = {
+        "KEY": NEIS_KEY,
+        "Type": "json",
+        "ATPT_OFCDC_SC_CODE": NAEJEONG_OFFICE,
+        "SD_SCHUL_CODE": NAEJEONG_SCHOOL,
+        "MLSV_YMD": today
+    }
+    try:
+        res = requests.get(url, params=params).json()
+        dishes = res["mealServiceDietInfo"][1]["row"][0]["DDISH_NM"]
+        cleaned = [clean_menu(d) for d in dishes.split("<br/>")]
+        menu = "\n".join(cleaned)
+        text = f"🍱 오늘의 급식\n\n{menu}"
+    except:
+        text = "오늘은 급식 정보가 없어요 🍽️"
+    return jsonify({
+        "version": "2.0",
+        "template": {"outputs": [{"simpleText": {"text": text}}]}
+    })
+
+@app.route("/naejeong/schedule", methods=["POST"])
+def naejeong_schedule():
+    year_month = get_kst_month()
+    url = "https://open.neis.go.kr/hub/SchoolSchedule"
+    params = {
+        "KEY": NEIS_KEY,
+        "Type": "json",
+        "ATPT_OFCDC_SC_CODE": NAEJEONG_OFFICE,
+        "SD_SCHUL_CODE": NAEJEONG_SCHOOL,
+        "AA_YMD": year_month
+    }
+    try:
+        res = requests.get(url, params=params).json()
+        rows = res["SchoolSchedule"][1]["row"]
+        result = []
+        for row in rows:
+            d = row["AA_YMD"]
+            name = row["EVENT_NM"]
+            result.append(f"{d[4:6]}/{d[6:8]} {name}")
+        text = f"📅 이번 달 학사일정\n\n" + "\n".join(result)
+    except:
+        text = "이번 달 학사일정이 없어요 📅"
+    return jsonify({
+        "version": "2.0",
+        "template": {"outputs": [{"simpleText": {"text": text}}]}
+    })
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
